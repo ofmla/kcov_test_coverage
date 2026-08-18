@@ -48,6 +48,6 @@ jobs:
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
-        # kcov names its Cobertura file "cobertura.xml" inside your output folder
+        token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage-dir/cov.xml
         fail_ci_if_error: true
