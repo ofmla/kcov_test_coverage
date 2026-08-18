@@ -1,0 +1,53 @@
+name: Fortran Coverage with kcov
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  run-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+      
+    - uses: actions/checkout@v7
+      with:
+        repository: 'SimonKagstrom/kcov'
+        ref: 'master'
+        path: 'my-dependencies/kcov-repo'
+        
+    - name: Install gfortran nad kcov
+      run: |
+        sudo apt-get update
+        # Install gfortran compiler and kcov system dependencies
+        sudo apt-get install -y gfortran binutils-dev build-essential cmake libssl-dev libcurl4-openssl-dev libelf-dev libstdc++-12-dev zlib1g-dev libdw-dev libiberty-dev
+        cd my-dependencies/kcov-repo
+        mkdir build
+        cd build
+        cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        ..
+        make
+        make DESTDIR=$HOME/tmp install
+        echo "$HOME/tmp/usr/bin" >> $GITHUB_PATH
+        
+    - name: Build Fortran binary
+      run: make
+
+    - name: Run kcov
+      run: |
+        mkdir -p coverage-dir
+        kcov --cobertura-only --include-pattern=math_mod.f90,main.f90 ./coverage-dir ./test_executable
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        # kcov names its Cobertura file "cobertura.xml" inside your output folder
+        files: ./coverage-dir/cov.xml
+        fail_ci_if_error: true
