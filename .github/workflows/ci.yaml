@@ -1,0 +1,86 @@
+name: CI with NVFortran and Kcov
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  NVHPC_VERSION: "24.5" # Specify your desired NVIDIA SDK version
+  NVHPC_DIR: "${{ github.workspace }}/nvhpc_install"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Cache the NVHPC compiler installation directory
+      - name: Cache NVHPC Compiler
+        id: cache-nvhpc
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NVHPC_DIR }}
+          key: ${{ runner.os }}-nvhpc-${{ env.NVHPC_VERSION }}
+
+      # Only downloads and installs if the cache missed
+      - name: Install NVHPC (if cache miss)
+        if: steps:cache-nvhpc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget gpupackages
+          # Download NVIDIA HPC SDK Open Edition
+          wget -q https://nvidia.com{{ env.NVHPC_VERSION }}/nvhpc_20${{ env.NVHPC_VERSION }}_Linux_x86_64_cuda_multi.tar.gz
+          tar xpzf nvhpc_20${{ env.NVHPC_VERSION }}_Linux_x86_64_cuda_multi.tar.gz
+          
+          # Run silent installation into our cached directory
+          cd nvhpc_20${{ env.NVHPC_VERSION }}_Linux_x86_64_cuda_multi
+          NVHPC_INSTALL_DIR=${{ env.NVHPC_DIR }} NVHPC_SILENT=true ./install
+
+      # Add nvfortran to the system PATH for this job
+      - name: Set NVHPC Environment
+        run: |
+          echo "${{ env.NVHPC_DIR }}/Linux_x86_64/${{ env.NVHPC_VERSION }}/compilers/bin" >> $GITHUB_PATH
+
+      # Compile your application with debug symbols (-g) for kcov coverage
+      - name: Compile Executable
+        run: |
+          nvfortran -g -O0 -o my_executable math_mod.f90 main.f90
+
+      - name: Checkout kcov repo
+      - uses: actions/checkout@v7
+        with:
+          repository: 'SimonKagstrom/kcov'
+          ref: 'master'
+          path: 'my-dependencies/kcov-repo'
+
+      # Install kcov and its dependencies
+      - name: Install Kcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils-dev build-essential cmake libssl-dev libcurl4-openssl-dev libelf-dev libstdc++-12-dev zlib1g-dev libdw-dev libiberty-dev
+          cd my-dependencies/kcov-repo
+          mkdir build
+          cd build
+          cmake \
+           -DCMAKE_BUILD_TYPE=Release \
+           -DCMAKE_INSTALL_PREFIX=/usr \
+          ..
+          make
+          make DESTDIR=$HOME/tmp install
+          echo "$HOME/tmp/usr/bin" >> $GITHUB_PATH
+
+      # Run kcov coverage collection
+      - name: Run Kcov Coverage
+        run: |
+          mkdir -p coverage
+          kcov --cobertura-only --include-pattern=math_mod.f90,main.f90 coverage ./my_executable
+
+      # Save coverage reports
+      - name: Upload Coverage Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: kcov-report
+          path: coverage/
