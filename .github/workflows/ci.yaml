@@ -49,8 +49,8 @@ jobs:
         run: |
           nvfortran -g -O0 -o my_executable math_mod.f90 main.f90
 
-      - name: Checkout kcov repo
-      - uses: actions/checkout@v7
+      - name: Checkout kcov
+        uses: actions/checkout@v7
         with:
           repository: 'SimonKagstrom/kcov'
           ref: 'master'
