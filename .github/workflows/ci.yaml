@@ -28,7 +28,7 @@ jobs:
 
       # Only downloads and installs if the cache missed
       - name: Install NVHPC (if cache miss)
-        if: steps:cache-nvhpc.outputs.cache-hit != 'true'
+        if: steps.cache-nvhpc.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y wget gpupackages
           # Download NVIDIA HPC SDK Open Edition
